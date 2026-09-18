@@ -4,14 +4,14 @@ import pandas as pd
 import numpy as np
 from textblob import TextBlob
 
-# 1. ضبط إعدادات الصفحة
+# 1. Page Configuration
 st.set_page_config(
     page_title="AI Sentiment Analytics Engine",
     page_icon="🔮",
     layout="wide"
 )
 
-# 2. تحميل النماذج
+# 2. Load Models
 @st.cache_resource
 def load_models():
     try:
@@ -25,7 +25,7 @@ def load_models():
 
 nlp_model, feature_model, scaler, num_cols = load_models()
 
-# 3. تصميم الواجهة (Dark Theme CSS)
+# 3. Dark Theme CSS
 st.markdown("""
     <style>
     html, body, [class*="css"], p, span, label { color: #FFFFFF !important; font-weight: 500; }
@@ -63,18 +63,18 @@ st.markdown("""
 col_input, col_display = st.columns([1, 1], gap="large")
 
 with col_input:
-    st.subheader("⚙️ التكوين والإدخال")
+    st.subheader("⚙️ Configuration & Input")
     
     choice = st.radio(
-        "حدد وضع تحليل المشاعر:",
-        ("مصنف النصوص بتقنية معالجة اللغة الطبيعية (محتوى المنشور)", "ميزات التفاعل الرقمي")
+        "Select Sentiment Analysis Mode:",
+        ("NLP Text Classifier (Post Content)", "Numerical Engagement Features")
     )
 
     st.markdown("---")
 
-    if choice == "مصنف النصوص بتقنية معالجة اللغة الطبيعية (محتوى المنشور)":
-        user_text = st.text_area("✍️ أدخل النص/التعليق لتحليله:", "this movie was boring", height=130)
-        submit_btn = st.button("🚀 تحليل المشاعر في النصوص", use_container_width=True)
+    if choice == "NLP Text Classifier (Post Content)":
+        user_text = st.text_area("✍️ Enter text/comment to analyze:", "The service was excellent and very fast", height=130)
+        submit_btn = st.button("🚀 Analyze Text Sentiment", use_container_width=True)
     else:
         st.write("📊 Set Engagement Values:")
         user_inputs = []
@@ -90,12 +90,11 @@ with col_input:
             submit_btn = None
 
 with col_display:
-    st.subheader("🎯 تنبؤات ومقاييس فورية")
+    st.subheader("🎯 Real-Time Predictions & Metrics")
     
     if submit_btn:
         try:
-            if choice == "مصنف النصوص بتقنية معالجة اللغة الطبيعية (محتوى المنشور)":
-                # استخدام مكتبة TextBlob المتقدمة لتحليل القطبية والأنماط
+            if choice == "NLP Text Classifier (Post Content)":
                 analysis = TextBlob(user_text)
                 polarity = analysis.sentiment.polarity
                 
