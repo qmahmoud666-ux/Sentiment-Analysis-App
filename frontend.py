@@ -24,7 +24,7 @@ def load_models():
 
 nlp_model, feature_model, scaler, num_cols = load_models()
 
-# 3. تصميم واجهة المستخدم
+# 3. تصميم واجهة المستخدم (Dark Theme CSS)
 st.markdown("""
     <style>
     html, body, [class*="css"], p, span, label {
@@ -84,8 +84,6 @@ st.markdown("""
 
 col_input, col_display = st.columns([1, 1], gap="large")
 
-label_mapping = {0: "Negative", 1: "Neutral", 2: "Positive"}
-
 with col_input:
     st.subheader("⚙️ Configuration & Input")
     
@@ -119,37 +117,70 @@ with col_display:
     if submit_btn and nlp_model is not None:
         try:
             if choice == "NLP Text Classifier (Post Content)":
-                raw_pred = nlp_model.predict([user_text])[0]
                 probs = nlp_model.predict_proba([user_text])[0]
-                active_model = nlp_model
+                model_classes = getattr(nlp_model, "classes_", None)
+                
+                # قائمة أسماء التصنيفات بالترتيب
+                label_names = ["Negative", "Neutral", "Positive"]
+                
+                # ربط كل كلاس بنسبته بشكل دقيق
+                confidence = {}
+                if model_classes is not None:
+                    for cls_val, prob in zip(model_classes, probs):
+                        if str(cls_val).isdigit():
+                            idx = int(cls_val)
+                            name = label_names[idx] if idx < len(label_names) else str(cls_val)
+                        else:
+                            name = str(cls_val)
+                        confidence[name] = float(prob)
+                else:
+                    for idx, prob in enumerate(probs):
+                        name = label_names[idx] if idx < len(label_names) else f"Class {idx}"
+                        confidence[name] = float(prob)
+                
+                # اختيار التصنيف صاحب أعلى نسبة احتمال
+                pred_text = max(confidence, key=confidence.get)
+
             else:
                 scaled_inputs = scaler.transform([user_inputs])
-                raw_pred = feature_model.predict(scaled_inputs)[0]
                 probs = feature_model.predict_proba(scaled_inputs)[0]
-                active_model = feature_model
+                model_classes = getattr(feature_model, "classes_", None)
+                
+                label_names = ["Negative", "Neutral", "Positive"]
+                confidence = {}
+                if model_classes is not None:
+                    for cls_val, prob in zip(model_classes, probs):
+                        if str(cls_val).isdigit():
+                            idx = int(cls_val)
+                            name = label_names[idx] if idx < len(label_names) else str(cls_val)
+                        else:
+                            name = str(cls_val)
+                        confidence[name] = float(prob)
+                else:
+                    for idx, prob in enumerate(probs):
+                        name = label_names[idx] if idx < len(label_names) else f"Class {idx}"
+                        confidence[name] = float(prob)
+                        
+                pred_text = max(confidence, key=confidence.get)
 
-            # معالجة النتيجة سواء كانت نصاً أو رقماً
-            if str(raw_pred).isdigit():
-                pred_text = label_mapping.get(int(raw_pred), str(raw_pred))
-            else:
-                pred_text = str(raw_pred)
-            
-            classes = getattr(active_model, "classes_", range(len(probs)))
-            confidence = {}
-            for c, p in zip(classes, probs):
-                label_name = label_mapping.get(int(c), str(c)) if str(c).isdigit() else str(c)
-                confidence[label_name] = float(p)
+            # اختيار اللون حسب النتيجة
+            color_map = {
+                "Negative": "#EF4444",  # أحمر
+                "Neutral": "#F59E0B",   # أصفر / برتقالي
+                "Positive": "#10B981"   # أخضر
+            }
+            res_color = color_map.get(pred_text, "#38BDF8")
 
             st.markdown(f"""
-                <div class="result-box">
-                    <h3 style="color: #94A3B8;">Prediction Result:</h3>
-                    <h1 style="margin:0; color: #38BDF8;">{pred_text}</h1>
+                <div class="result-box" style="border-left-color: {res_color};">
+                    <h3 style="color: #94A3B8; margin-bottom: 5px;">Prediction Result:</h3>
+                    <h1 style="margin:0; color: {res_color}; font-size: 2.2rem;">{pred_text}</h1>
                 </div>
             """, unsafe_allow_html=True)
             
             st.markdown("### 📈 Confidence Breakdown")
             for label, prob in confidence.items():
-                st.write(f"**{label}**")
+                st.write(f"**{label}** ({prob*100:.1f}%)")
                 st.progress(float(prob))
 
         except Exception as e:
