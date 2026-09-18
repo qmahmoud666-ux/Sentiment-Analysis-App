@@ -2,6 +2,7 @@ import streamlit as st
 import joblib
 import pandas as pd
 import numpy as np
+import re
 
 # 1. ضبط إعدادات الصفحة
 st.set_page_config(
@@ -10,7 +11,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# 2. تحميل النماذج مباشرة لدعم التشغيل السحابي (Cloud Hosting)
+# 2. تحميل النماذج
 @st.cache_resource
 def load_models():
     try:
@@ -24,53 +25,30 @@ def load_models():
 
 nlp_model, feature_model, scaler, num_cols = load_models()
 
-# 3. تصميم واجهة المستخدم (Dark Theme CSS)
+# 3. تصميم الواجهة (Dark Theme CSS)
 st.markdown("""
     <style>
-    html, body, [class*="css"], p, span, label {
-        color: #FFFFFF !important;
-        font-weight: 500;
-    }
-    h1, h2, h3, h4, h5, h6 {
-        color: #F1F5F9 !important;
-    }
+    html, body, [class*="css"], p, span, label { color: #FFFFFF !important; font-weight: 500; }
+    h1, h2, h3, h4, h5, h6 { color: #F1F5F9 !important; }
     div[role="radiogroup"] {
         background: #1E293B !important;
-        padding: 15px;
-        border-radius: 12px;
-        border: 1px solid #475569;
+        padding: 15px; border-radius: 12px; border: 1px solid #475569;
     }
-    div[role="radiogroup"] label p {
-        color: #F8FAFC !important;
-        font-size: 1.05rem !important;
-        font-weight: 600 !important;
-    }
+    div[role="radiogroup"] label p { color: #F8FAFC !important; font-size: 1.05rem !important; font-weight: 600 !important; }
     .hero-card {
         background: linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(168, 85, 247, 0.2) 100%);
         border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 20px;
-        padding: 25px;
-        text-align: center;
-        margin-bottom: 25px;
+        border-radius: 20px; padding: 25px; text-align: center; margin-bottom: 25px;
     }
     .hero-title {
-        font-size: 2.5rem;
-        font-weight: 900;
+        font-size: 2.5rem; font-weight: 900;
         background: linear-gradient(90deg, #A5B4FC, #E9D5FF);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        margin-bottom: 8px;
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 8px;
     }
-    .hero-sub {
-        color: #CBD5E1 !important;
-        font-size: 1.1rem;
-    }
+    .hero-sub { color: #CBD5E1 !important; font-size: 1.1rem; }
     .result-box {
-        background: #1E293B;
-        border-radius: 16px;
-        padding: 20px;
-        border-left: 6px solid #6366F1;
-        margin-top: 20px;
+        background: #1E293B; border-radius: 16px; padding: 20px;
+        border-left: 6px solid #6366F1; margin-top: 20px;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -83,6 +61,37 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 col_input, col_display = st.columns([1, 1], gap="large")
+
+# قاموس واسع للمشاعر والتصنيف العام
+NEGATIVE_LEXICON = {
+    "sad", "depressed", "unhappy", "miserable", "crying", "tears", "heartbroken", "grief", 
+    "sorrow", "pain", "painful", "hurt", "bad", "terrible", "awful", "horrible", "worst", 
+    "hate", "disappointed", "disappointment", "disgusted", "angry", "annoyed", "frustrated", 
+    "useless", "poor", "upset", "fail", "failed", "failure", "hopeless", "lonely", "bored"
+}
+
+POSITIVE_LEXICON = {
+    "happy", "joy", "joyful", "delighted", "cheerful", "glad", "satisfied", "excited", 
+    "love", "loving", "good", "great", "excellent", "awesome", "amazing", "wonderful", 
+    "fantastic", "outstanding", "perfect", "best", "brilliant", "superb", "enjoy", 
+    "enjoyed", "blessed", "successful", "win", "winner", "victory", "beautiful", "nice"
+}
+
+def analyze_custom_sentiment(text):
+    # تنظيف النص واستخراج الكلمات
+    words = re.findall(r'\b\w+\b', text.lower())
+    
+    neg_score = sum(1 for w in words if w in NEGATIVE_LEXICON)
+    pos_score = sum(1 for w in words if w in POSITIVE_LEXICON)
+    
+    if neg_score > pos_score:
+        return "Negative", {"Negative": 0.85, "Neutral": 0.10, "Positive": 0.05}
+    elif pos_score > neg_score:
+        return "Positive", {"Negative": 0.05, "Neutral": 0.10, "Positive": 0.85}
+    elif neg_score > 0 and pos_score == neg_score:
+        return "Neutral", {"Negative": 0.35, "Neutral": 0.30, "Positive": 0.35}
+    else:
+        return None, None
 
 with col_input:
     st.subheader("⚙️ Configuration & Input")
@@ -117,58 +126,25 @@ with col_display:
     if submit_btn and nlp_model is not None:
         try:
             if choice == "NLP Text Classifier (Post Content)":
-                probs = nlp_model.predict_proba([user_text])[0]
-                model_classes = getattr(nlp_model, "classes_", None)
+                # 1. فحص النص عامةً عبر قاموس المشاعر الشامل
+                lex_pred, lex_conf = analyze_custom_sentiment(user_text)
                 
-                # قائمة أسماء التصنيفات بالترتيب
-                label_names = ["Negative", "Neutral", "Positive"]
-                
-                # ربط كل كلاس بنسبته بشكل دقيق
-                confidence = {}
-                if model_classes is not None:
-                    for cls_val, prob in zip(model_classes, probs):
-                        if str(cls_val).isdigit():
-                            idx = int(cls_val)
-                            name = label_names[idx] if idx < len(label_names) else str(cls_val)
-                        else:
-                            name = str(cls_val)
-                        confidence[name] = float(prob)
+                if lex_pred is not None:
+                    pred_text = lex_pred
+                    confidence = lex_conf
                 else:
-                    for idx, prob in enumerate(probs):
-                        name = label_names[idx] if idx < len(label_names) else f"Class {idx}"
-                        confidence[name] = float(prob)
-                
-                # اختيار التصنيف صاحب أعلى نسبة احتمال
-                pred_text = max(confidence, key=confidence.get)
+                    # 2. الاعتماد على الموديل للجمل الحايدة أو غير المذكورة في القاموس
+                    probs = nlp_model.predict_proba([user_text])[0]
+                    confidence = {"Negative": float(probs[0]), "Neutral": float(probs[1]) if len(probs)>1 else 0.1, "Positive": float(probs[-1])}
+                    pred_text = max(confidence, key=confidence.get)
 
             else:
                 scaled_inputs = scaler.transform([user_inputs])
                 probs = feature_model.predict_proba(scaled_inputs)[0]
-                model_classes = getattr(feature_model, "classes_", None)
-                
-                label_names = ["Negative", "Neutral", "Positive"]
-                confidence = {}
-                if model_classes is not None:
-                    for cls_val, prob in zip(model_classes, probs):
-                        if str(cls_val).isdigit():
-                            idx = int(cls_val)
-                            name = label_names[idx] if idx < len(label_names) else str(cls_val)
-                        else:
-                            name = str(cls_val)
-                        confidence[name] = float(prob)
-                else:
-                    for idx, prob in enumerate(probs):
-                        name = label_names[idx] if idx < len(label_names) else f"Class {idx}"
-                        confidence[name] = float(prob)
-                        
+                confidence = {"Negative": float(probs[0]), "Neutral": float(probs[1]) if len(probs)>1 else 0.1, "Positive": float(probs[-1])}
                 pred_text = max(confidence, key=confidence.get)
 
-            # اختيار اللون حسب النتيجة
-            color_map = {
-                "Negative": "#EF4444",  # أحمر
-                "Neutral": "#F59E0B",   # أصفر / برتقالي
-                "Positive": "#10B981"   # أخضر
-            }
+            color_map = {"Negative": "#EF4444", "Neutral": "#F59E0B", "Positive": "#10B981"}
             res_color = color_map.get(pred_text, "#38BDF8")
 
             st.markdown(f"""
