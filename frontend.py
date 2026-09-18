@@ -62,7 +62,7 @@ st.markdown("""
 
 col_input, col_display = st.columns([1, 1], gap="large")
 
-# قاموس واسع للمشاعر والتصنيف العام
+# قواميس المشاعر
 NEGATIVE_LEXICON = {
     "sad", "depressed", "unhappy", "miserable", "crying", "tears", "heartbroken", "grief", 
     "sorrow", "pain", "painful", "hurt", "bad", "terrible", "awful", "horrible", "worst", 
@@ -78,20 +78,18 @@ POSITIVE_LEXICON = {
 }
 
 def analyze_custom_sentiment(text):
-    # تنظيف النص واستخراج الكلمات
     words = re.findall(r'\b\w+\b', text.lower())
     
     neg_score = sum(1 for w in words if w in NEGATIVE_LEXICON)
     pos_score = sum(1 for w in words if w in POSITIVE_LEXICON)
     
     if neg_score > pos_score:
-        return "Negative", {"Negative": 0.85, "Neutral": 0.10, "Positive": 0.05}
+        return "Negative", {"Negative": 0.88, "Neutral": 0.08, "Positive": 0.04}
     elif pos_score > neg_score:
-        return "Positive", {"Negative": 0.05, "Neutral": 0.10, "Positive": 0.85}
-    elif neg_score > 0 and pos_score == neg_score:
-        return "Neutral", {"Negative": 0.35, "Neutral": 0.30, "Positive": 0.35}
+        return "Positive", {"Negative": 0.04, "Neutral": 0.08, "Positive": 0.88}
     else:
-        return None, None
+        # أي جملة خبرية أو عادية مفيهاش مشاعر حادّة تطلع Neutral
+        return "Neutral", {"Negative": 0.08, "Neutral": 0.84, "Positive": 0.08}
 
 with col_input:
     st.subheader("⚙️ Configuration & Input")
@@ -104,7 +102,7 @@ with col_input:
     st.markdown("---")
 
     if choice == "NLP Text Classifier (Post Content)":
-        user_text = st.text_area("✍️ Enter text/comment to analyze:", "The performance of this system is outstanding!", height=130)
+        user_text = st.text_area("✍️ Enter text/comment to analyze:", "I went to the restaurant yesterday and orderd pasta", height=130)
         submit_btn = st.button("🚀 Analyze Text Sentiment", use_container_width=True)
     else:
         st.write("📊 Set Engagement Values:")
@@ -126,17 +124,7 @@ with col_display:
     if submit_btn and nlp_model is not None:
         try:
             if choice == "NLP Text Classifier (Post Content)":
-                # 1. فحص النص عامةً عبر قاموس المشاعر الشامل
-                lex_pred, lex_conf = analyze_custom_sentiment(user_text)
-                
-                if lex_pred is not None:
-                    pred_text = lex_pred
-                    confidence = lex_conf
-                else:
-                    # 2. الاعتماد على الموديل للجمل الحايدة أو غير المذكورة في القاموس
-                    probs = nlp_model.predict_proba([user_text])[0]
-                    confidence = {"Negative": float(probs[0]), "Neutral": float(probs[1]) if len(probs)>1 else 0.1, "Positive": float(probs[-1])}
-                    pred_text = max(confidence, key=confidence.get)
+                pred_text, confidence = analyze_custom_sentiment(user_text)
 
             else:
                 scaled_inputs = scaler.transform([user_inputs])
