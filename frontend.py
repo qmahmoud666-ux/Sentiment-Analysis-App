@@ -11,7 +11,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# 2. Load Models
+# 2. Load Models Safely
 @st.cache_resource
 def load_models():
     try:
@@ -25,7 +25,7 @@ def load_models():
 
 nlp_model, feature_model, scaler, num_cols = load_models()
 
-# 3. Dark Theme CSS
+# 3. Dark Theme CSS UI Setup
 st.markdown("""
     <style>
     html, body, [class*="css"], p, span, label { color: #FFFFFF !important; font-weight: 500; }
@@ -94,6 +94,7 @@ with col_display:
     
     if submit_btn:
         try:
+            # الخيار الأول: تحليل الكومنتات والنصوص
             if choice == "NLP Text Classifier (Post Content)":
                 analysis = TextBlob(user_text)
                 polarity = analysis.sentiment.polarity
@@ -110,12 +111,25 @@ with col_display:
                     pred_text = "Neutral"
                     confidence = {"Negative": 0.10, "Neutral": 0.80, "Positive": 0.10}
 
+            # الخيار الثاني: تحليل قيم الأرقام
             else:
                 scaled_inputs = scaler.transform([user_inputs])
-                probs = feature_model.predict_proba(scaled_inputs)[0]
-                confidence = {"Negative": float(probs[0]), "Neutral": float(probs[1]) if len(probs)>1 else 0.1, "Positive": float(probs[-1])}
-                pred_text = max(confidence, key=confidence.get)
+                raw_pred = feature_model.predict(scaled_inputs)[0]
+                
+                label_map = {0: "Negative", 1: "Neutral", 2: "Positive", "0": "Negative", "1": "Neutral", "2": "Positive"}
+                pred_text = label_map.get(raw_pred, str(raw_pred))
+                
+                if hasattr(feature_model, "predict_proba"):
+                    probs = feature_model.predict_proba(scaled_inputs)[0]
+                    classes = getattr(feature_model, "classes_", [0, 1, 2])
+                    confidence = {}
+                    for cls, prob in zip(classes, probs):
+                        name = label_map.get(cls, str(cls))
+                        confidence[name] = round(float(prob), 2)
+                else:
+                    confidence = {"Negative": 0.33, "Neutral": 0.33, "Positive": 0.34}
 
+            # اختيار لون القالب حسب النتيجة
             color_map = {"Negative": "#EF4444", "Neutral": "#F59E0B", "Positive": "#10B981"}
             res_color = color_map.get(pred_text, "#38BDF8")
 
