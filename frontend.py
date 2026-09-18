@@ -119,17 +119,26 @@ with col_display:
     if submit_btn and nlp_model is not None:
         try:
             if choice == "NLP Text Classifier (Post Content)":
-                raw_pred = int(nlp_model.predict([user_text])[0])
+                raw_pred = nlp_model.predict([user_text])[0]
                 probs = nlp_model.predict_proba([user_text])[0]
+                active_model = nlp_model
             else:
                 scaled_inputs = scaler.transform([user_inputs])
-                raw_pred = int(feature_model.predict(scaled_inputs)[0])
+                raw_pred = feature_model.predict(scaled_inputs)[0]
                 probs = feature_model.predict_proba(scaled_inputs)[0]
+                active_model = feature_model
 
-            pred_text = label_mapping.get(raw_pred, str(raw_pred))
+            # معالجة النتيجة سواء كانت نصاً أو رقماً
+            if str(raw_pred).isdigit():
+                pred_text = label_mapping.get(int(raw_pred), str(raw_pred))
+            else:
+                pred_text = str(raw_pred)
             
-            classes = getattr(nlp_model if choice.startswith("NLP") else feature_model, "classes_", range(len(probs)))
-            confidence = {label_mapping.get(c, f"Class {c}"): float(p) for c, p in zip(classes, probs)}
+            classes = getattr(active_model, "classes_", range(len(probs)))
+            confidence = {}
+            for c, p in zip(classes, probs):
+                label_name = label_mapping.get(int(c), str(c)) if str(c).isdigit() else str(c)
+                confidence[label_name] = float(p)
 
             st.markdown(f"""
                 <div class="result-box">
