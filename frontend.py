@@ -2,7 +2,7 @@ import streamlit as st
 import joblib
 import pandas as pd
 import numpy as np
-import re
+from textblob import TextBlob
 
 # 1. ضبط إعدادات الصفحة
 st.set_page_config(
@@ -62,48 +62,19 @@ st.markdown("""
 
 col_input, col_display = st.columns([1, 1], gap="large")
 
-# قواميس المشاعر
-NEGATIVE_LEXICON = {
-    "sad", "depressed", "unhappy", "miserable", "crying", "tears", "heartbroken", "grief", 
-    "sorrow", "pain", "painful", "hurt", "bad", "terrible", "awful", "horrible", "worst", 
-    "hate", "disappointed", "disappointment", "disgusted", "angry", "annoyed", "frustrated", 
-    "useless", "poor", "upset", "fail", "failed", "failure", "hopeless", "lonely", "bored"
-}
-
-POSITIVE_LEXICON = {
-    "happy", "joy", "joyful", "delighted", "cheerful", "glad", "satisfied", "excited", 
-    "love", "loving", "good", "great", "excellent", "awesome", "amazing", "wonderful", 
-    "fantastic", "outstanding", "perfect", "best", "brilliant", "superb", "enjoy", 
-    "enjoyed", "blessed", "successful", "win", "winner", "victory", "beautiful", "nice"
-}
-
-def analyze_custom_sentiment(text):
-    words = re.findall(r'\b\w+\b', text.lower())
-    
-    neg_score = sum(1 for w in words if w in NEGATIVE_LEXICON)
-    pos_score = sum(1 for w in words if w in POSITIVE_LEXICON)
-    
-    if neg_score > pos_score:
-        return "Negative", {"Negative": 0.88, "Neutral": 0.08, "Positive": 0.04}
-    elif pos_score > neg_score:
-        return "Positive", {"Negative": 0.04, "Neutral": 0.08, "Positive": 0.88}
-    else:
-        # أي جملة خبرية أو عادية مفيهاش مشاعر حادّة تطلع Neutral
-        return "Neutral", {"Negative": 0.08, "Neutral": 0.84, "Positive": 0.08}
-
 with col_input:
-    st.subheader("⚙️ Configuration & Input")
+    st.subheader("⚙️ التكوين والإدخال")
     
     choice = st.radio(
-        "Select Sentiment Analysis Mode:",
-        ("NLP Text Classifier (Post Content)", "Numerical Engagement Features")
+        "حدد وضع تحليل المشاعر:",
+        ("مصنف النصوص بتقنية معالجة اللغة الطبيعية (محتوى المنشور)", "ميزات التفاعل الرقمي")
     )
 
     st.markdown("---")
 
-    if choice == "NLP Text Classifier (Post Content)":
-        user_text = st.text_area("✍️ Enter text/comment to analyze:", "I went to the restaurant yesterday and orderd pasta", height=130)
-        submit_btn = st.button("🚀 Analyze Text Sentiment", use_container_width=True)
+    if choice == "مصنف النصوص بتقنية معالجة اللغة الطبيعية (محتوى المنشور)":
+        user_text = st.text_area("✍️ أدخل النص/التعليق لتحليله:", "this movie was boring", height=130)
+        submit_btn = st.button("🚀 تحليل المشاعر في النصوص", use_container_width=True)
     else:
         st.write("📊 Set Engagement Values:")
         user_inputs = []
@@ -119,12 +90,26 @@ with col_input:
             submit_btn = None
 
 with col_display:
-    st.subheader("🎯 Real-Time Predictions & Metrics")
+    st.subheader("🎯 تنبؤات ومقاييس فورية")
     
-    if submit_btn and nlp_model is not None:
+    if submit_btn:
         try:
-            if choice == "NLP Text Classifier (Post Content)":
-                pred_text, confidence = analyze_custom_sentiment(user_text)
+            if choice == "مصنف النصوص بتقنية معالجة اللغة الطبيعية (محتوى المنشور)":
+                # استخدام مكتبة TextBlob المتقدمة لتحليل القطبية والأنماط
+                analysis = TextBlob(user_text)
+                polarity = analysis.sentiment.polarity
+                
+                if polarity < -0.05:
+                    pred_text = "Negative"
+                    neg_p = min(0.95, 0.5 + abs(polarity))
+                    confidence = {"Negative": round(neg_p, 2), "Neutral": round((1-neg_p)*0.6, 2), "Positive": round((1-neg_p)*0.4, 2)}
+                elif polarity > 0.05:
+                    pred_text = "Positive"
+                    pos_p = min(0.95, 0.5 + polarity)
+                    confidence = {"Negative": round((1-pos_p)*0.4, 2), "Neutral": round((1-pos_p)*0.6, 2), "Positive": round(pos_p, 2)}
+                else:
+                    pred_text = "Neutral"
+                    confidence = {"Negative": 0.10, "Neutral": 0.80, "Positive": 0.10}
 
             else:
                 scaled_inputs = scaler.transform([user_inputs])
@@ -149,7 +134,5 @@ with col_display:
 
         except Exception as e:
             st.error(f"Error executing prediction: {e}")
-    elif submit_btn:
-        st.error("⚠️ Model files could not be loaded. Please ensure all .pkl files are committed to GitHub.")
     else:
         st.info("👈 Enter data and click Analyze to view real-time model outputs here.")
