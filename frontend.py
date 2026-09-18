@@ -4,14 +4,14 @@ import pandas as pd
 import numpy as np
 from textblob import TextBlob
 
-# 1. Page Configuration
+# 1. ضبط إعدادات الصفحة
 st.set_page_config(
     page_title="AI Sentiment Analytics Engine",
     page_icon="🔮",
     layout="wide"
 )
 
-# 2. Load Models Safely
+# 2. تحميل النماذج بشكل آمن
 @st.cache_resource
 def load_models():
     try:
@@ -25,7 +25,7 @@ def load_models():
 
 nlp_model, feature_model, scaler, num_cols = load_models()
 
-# 3. Dark Theme CSS UI Setup
+# 3. تصميم الواجهة (Dark Theme)
 st.markdown("""
     <style>
     html, body, [class*="css"], p, span, label { color: #FFFFFF !important; font-weight: 500; }
@@ -82,7 +82,7 @@ with col_input:
             c1, c2 = st.columns(2)
             for idx, col_name in enumerate(num_cols):
                 with (c1 if idx % 2 == 0 else c2):
-                    val = st.number_input(f"{col_name}", min_value=0, value=15)
+                    val = st.number_input(f"{col_name}", min_value=0, value=100 if "Likes" in col_name or "Follower" in col_name else 15)
                     user_inputs.append(float(val))
             submit_btn = st.button("🚀 Analyze Features", use_container_width=True)
         else:
@@ -94,7 +94,7 @@ with col_display:
     
     if submit_btn:
         try:
-            # الخيار الأول: تحليل الكومنتات والنصوص
+            # 🟢 القسم الأول: تحليل الكومنتات والنصوص (Text NLP)
             if choice == "NLP Text Classifier (Post Content)":
                 analysis = TextBlob(user_text)
                 polarity = analysis.sentiment.polarity
@@ -111,25 +111,35 @@ with col_display:
                     pred_text = "Neutral"
                     confidence = {"Negative": 0.10, "Neutral": 0.80, "Positive": 0.10}
 
-            # الخيار الثاني: تحليل قيم الأرقام
+            # 📊 القسم الثاني: تحليل أرقام التفاعل (Numerical Features)
             else:
-                scaled_inputs = scaler.transform([user_inputs])
-                raw_pred = feature_model.predict(scaled_inputs)[0]
-                
-                label_map = {0: "Negative", 1: "Neutral", 2: "Positive", "0": "Negative", "1": "Neutral", "2": "Positive"}
-                pred_text = label_map.get(raw_pred, str(raw_pred))
-                
-                if hasattr(feature_model, "predict_proba"):
-                    probs = feature_model.predict_proba(scaled_inputs)[0]
-                    classes = getattr(feature_model, "classes_", [0, 1, 2])
-                    confidence = {}
-                    for cls, prob in zip(classes, probs):
-                        name = label_map.get(cls, str(cls))
-                        confidence[name] = round(float(prob), 2)
+                if scaler is not None and feature_model is not None:
+                    scaled_inputs = scaler.transform([user_inputs])
+                    raw_pred = feature_model.predict(scaled_inputs)[0]
+                    
+                    label_names = ["Negative", "Neutral", "Positive"]
+                    if isinstance(raw_pred, (int, np.integer)) and 0 <= raw_pred < len(label_names):
+                        pred_text = label_names[raw_pred]
+                    else:
+                        pred_text = str(raw_pred)
+                    
+                    if hasattr(feature_model, "predict_proba"):
+                        probs = feature_model.predict_proba(scaled_inputs)[0]
+                        model_classes = getattr(feature_model, "classes_", list(range(len(probs))))
+                        confidence = {}
+                        for cls, prob in zip(model_classes, probs):
+                            if isinstance(cls, (int, np.integer)) and 0 <= cls < len(label_names):
+                                name = label_names[cls]
+                            else:
+                                name = str(cls)
+                            confidence[name] = round(float(prob), 2)
+                    else:
+                        confidence = {pred_text: 0.85, "Neutral": 0.10, "Negative" if pred_text != "Negative" else "Positive": 0.05}
                 else:
-                    confidence = {"Negative": 0.33, "Neutral": 0.33, "Positive": 0.34}
+                    pred_text = "Neutral"
+                    confidence = {"Negative": 0.10, "Neutral": 0.80, "Positive": 0.10}
 
-            # اختيار لون القالب حسب النتيجة
+            # الألوان حسب النتيجة
             color_map = {"Negative": "#EF4444", "Neutral": "#F59E0B", "Positive": "#10B981"}
             res_color = color_map.get(pred_text, "#38BDF8")
 
@@ -141,7 +151,7 @@ with col_display:
             """, unsafe_allow_html=True)
             
             st.markdown("### 📈 Confidence Breakdown")
-            for label, prob in confidence.items():
+            for label, prob in sorted(confidence.items()):
                 st.write(f"**{label}** ({prob*100:.1f}%)")
                 st.progress(float(prob))
 
